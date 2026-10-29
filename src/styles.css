@@ -17,3 +17,23 @@
 .choice-help{position:relative;display:inline-flex;max-width:100%}.choice-help:has(.choice-tooltip){z-index:20}.choice-tooltip{position:absolute;top:calc(100% + 8px);width:min(320px,calc(100vw - 32px));padding:14px 16px;background:#f0f3e9;color:#2c4433;border:1px solid #c6d1bc;border-radius:4px;box-shadow:0 8px 22px #21352618;font-size:14px;line-height:1.8;font-weight:400;text-align:left;white-space:normal;z-index:20}.choice-tooltip:before{content:"";position:absolute;left:0;right:0;top:-9px;height:9px}.concept-explorer .route-context{font-size:14px;line-height:1.9;color:#52634e;border-top:1px solid var(--line);padding-top:18px;margin-top:24px}.batch-explanation,.training-budget{border-left:2px solid #99ad8b;background:#f0f3e9;padding:15px 19px;margin:22px 0;font-size:14px;line-height:1.9}.batch-explanation p,.training-budget p{margin:7px 0}.training-budget{margin:0 0 22px}.parameter-example{font-size:14px}.parameter-example code{display:block;margin:8px 0;font-size:15px}.step-progress{display:grid;grid-template-columns:repeat(4,1fr);gap:18px;list-style:none;padding:18px 0;margin:0 0 30px;border-block:1px solid var(--line)}.step-progress li{color:#78806f;font-size:14px;line-height:1.8}.step-progress small{display:block;font-size:11px}.step-progress .current{color:#244f34;font-weight:600}.step-progress .done{color:#356447}.calculation-status{padding:10px 0;border-block:1px solid var(--line);font-size:13px;color:#52684a}.prediction-pending{padding:12px 0 12px 24px;border-left:1px solid var(--line);color:#78816f;display:flex;flex-direction:column;justify-content:center;font-size:14px;line-height:1.9}.prediction-pending p{margin:12px 0}.prediction-pending.initial{min-height:120px;border:0;padding:24px 0}.update-result{background:#edf2e7;padding:15px 18px;color:#356447;font-size:14px}.step-progress+.single .chapter-no{font-size:32px}.training-budget .inline-term{white-space:normal}@media(max-width:760px){.step-progress{grid-template-columns:1fr 1fr;gap:12px}.step-progress li{font-size:12px}.prob-comparison .prediction-pending{padding:8px 0 8px 12px;font-size:12px}.batch-explanation,.training-budget{padding:12px 14px;font-size:13px}.choice-tooltip{font-size:13px}.single .sample-pair>div.answer{max-width:120px}.single .sample-pair code{font-size:20px}}
 
 .prob-row>span:first-child{white-space:nowrap}.training-budget p{line-height:1.8}.step-progress+.single .intro>.caption{font-family:inherit;font-size:13px}
+
+/* Keep removed rows in place so cleaning is visible and reversible. */
+.data-lines button{align-items:center}
+.data-lines button>.line-copy{color:inherit;font-size:inherit}
+.data-lines .line-number{flex:0 0 20px}
+.duplicate-label{margin-left:auto;flex-shrink:0;font-family:inherit;font-size:10px;color:#8a652d;background:#f7f0df;padding:2px 5px;border-radius:3px}
+.data-lines button.line-removed:disabled{opacity:1;color:#a3483d;background:#faf0ed;cursor:default}
+.line-removed del{text-decoration-thickness:1.5px}
+.line-removed .duplicate-label{color:#a3483d;background:#f2dfd9}
+.setup-stages{list-style:none;margin:0;padding:0 24px}
+.setup-stages>li{display:flex;gap:16px;padding:20px 0;border-bottom:1px solid var(--line)}
+.setup-stages>li:last-child{border-bottom:0}
+.setup-index{font-size:13px;color:var(--green);padding-top:3px;flex:0 0 24px;font-variant-numeric:tabular-nums}
+.setup-stages h3{font-family:inherit;font-size:16px;margin:0 0 8px}
+.setup-stages p{font-size:14px;line-height:1.85;margin:0 0 8px}
+.setup-stages small{display:block;color:#697361;font-size:12px;line-height:1.8}
+.setup-values{display:flex;flex-wrap:wrap;gap:8px 20px;padding:10px 12px;margin:10px 0;background:#eff2e9;font-size:13px}
+.setup-values code{font-variant-numeric:tabular-nums;font-weight:600;color:var(--green);margin-left:6px}
+.model-setup .intro .chapter-no{font-size:32px}
+@media(max-width:760px){.setup-stages{padding:0 16px}.setup-stages>li{gap:10px}.setup-stages h3{font-size:15px}.setup-stages p{font-size:13px}.duplicate-label{font-size:10px}.data-lines button{gap:8px}}

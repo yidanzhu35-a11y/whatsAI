@@ -10,9 +10,9 @@ import {definitions} from './terms.jsx';
 const allTerms=[...Object.entries(definitions),...glossary.filter(([name])=>!definitions[name]&&!['损失 loss','梯度 gradient','学习率 learning rate','批次 batch','训练步 step','检查点 checkpoint'].includes(name))];
 const dataFor=dedupe=>samples(cleanData(dedupe));
 export function App(){
- const [page,setPage]=useState(()=>{const n=Number(new URLSearchParams(location.search).get('chapter'));return n>=0&&n<7?n:0});const [dedupe,setDedupe]=useState(true),[config,setConfig]=useState({lr:.4,batch:24,max:300}),[running,setRunning]=useState(false),[selected,setSelected]=useState(null),[run,setRun]=useState(1),[runs,setRuns]=useState([]),[notice,setNotice]=useState(''),[glossOpen,setGlossOpen]=useState(false);
+ const [page,setPage]=useState(()=>{const n=Number(new URLSearchParams(location.search).get('chapter'));return n>=0&&n<7?n:0});const [dedupe,setDedupe]=useState(false),[config,setConfig]=useState({lr:.4,batch:24,max:300}),[running,setRunning]=useState(false),[selected,setSelected]=useState(null),[run,setRun]=useState(1),[runs,setRuns]=useState([]),[notice,setNotice]=useState(''),[glossOpen,setGlossOpen]=useState(false);
  const model=useRef(null);if(!model.current)model.current=new TinyLM();const m=model.current;
- const [history,setHistory]=useState(()=>[{...evaluate(m,dataFor(true)),sample:greedy(m,PROMPT)}]);
+ const [history,setHistory]=useState(()=>[{...evaluate(m,dataFor(false)),sample:greedy(m,PROMPT)}]);
  const [checkpoints,setCheckpoints]=useState(()=>[{id:'1-0',name:'初始模型',run:1,state:m.snapshot(),val:m.loss(samples(VALID_TEXT))}]);
  const [seen,setSeen]=useState(()=>new Set([page]));
  const record=()=>{const p={...evaluate(model.current,dataFor(dedupe)),sample:greedy(model.current,PROMPT)};setHistory(h=>h.at(-1)?.step===p.step?[...h.slice(0,-1),p]:[...h,p]);return p};
