@@ -21,6 +21,8 @@ export function normalizeDocument(value) {
     if (!item || typeof item.id !== 'string' || !/^[a-zA-Z0-9_-]{1,100}$/.test(item.id)) throw new Error('批注编号不正确');
     if (ids.has(item.id)) throw new Error('批注文件中有重复编号');
     ids.add(item.id);
+    // Version 1 records include the former chapter 6 (使用模型). Chapter
+    // navigation can change without invalidating persisted review history.
     if (!Number.isInteger(item.chapter) || item.chapter < 0 || item.chapter > 6) throw new Error('章节编号不正确');
     if (!['text', 'element', 'chapter'].includes(item.kind)) throw new Error('批注位置类型不正确');
     if (!['open', 'resolved'].includes(item.status)) throw new Error('批注状态不正确');
@@ -60,6 +62,28 @@ export function mergeComments(left, right) {
 
 export function makeDocument(comments) {
   return { version: FEEDBACK_VERSION, comments };
+}
+
+// Preserve the original chapter number/title in storage; only redirect navigation.
+export function feedbackChapter(comment) {
+  return comment.chapter === 6 ? 4 : comment.chapter;
+}
+
+export function saveBrowserComments(storage, comments) {
+  const raw = storage.getItem(FEEDBACK_KEY);
+  // Re-read before every write. A damaged/unavailable store must never be
+  // overwritten, but a later successful read should allow saving again.
+  const existing = raw ? normalizeDocument(JSON.parse(raw)).comments : [];
+  const merged = mergeComments(existing, normalizeDocument(makeDocument(comments)).comments);
+  storage.setItem(FEEDBACK_KEY, JSON.stringify(makeDocument(merged)));
+  return merged;
+}
+
+export async function saveFeedbackCopies(comments, saveBrowser, saveFile) {
+  let browserSaved = false, fileSaved = false;
+  try { browserSaved = Boolean(saveBrowser(comments)); } catch {}
+  try { fileSaved = Boolean(await saveFile(comments)); } catch {}
+  return { saved: browserSaved || fileSaved, browserSaved, fileSaved };
 }
 
 export function nextTimestamp(previous) {

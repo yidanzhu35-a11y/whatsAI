@@ -5,7 +5,7 @@ import { mkdtemp, readFile, writeFile, rm } from 'node:fs/promises';
 import path from 'node:path';
 import os from 'node:os';
 import { createFeedbackMiddleware } from '../scripts/feedback-plugin.mjs';
-import { makeDocument, normalizeDocument, mergeComments, commentsMarkdown } from '../src/feedback-store.js';
+import { FEEDBACK_KEY, makeDocument, normalizeDocument, mergeComments, commentsMarkdown, feedbackChapter, saveBrowserComments, saveFeedbackCopies } from '../src/feedback-store.js';
 
 const comment = (id = 'note-one', overrides = {}) => ({
   id, chapter: 0, chapterTitle: '概念地图', kind: 'text', quote: '预训练',
@@ -104,4 +104,75 @@ test('an unreadable existing file is preserved rather than silently reset', asyn
   assert.equal((await app.get()).status, 500);
   assert.equal((await app.post(makeDocument([comment()]))).status, 500);
   assert.equal(await readFile(file, 'utf8'), 'broken JSON that must not be overwritten');
+});
+
+test('former seventh-chapter comments survive read, save and reload without rewriting history', async t => {
+  const app = await fixture(t);
+  const legacy = comment('legacy-inference', { chapter: 6, chapterTitle: '使用模型' });
+  const deleted = comment('legacy-deleted', { chapter: 6, deletedAt: comment().updatedAt });
+  await writeFile(path.join(app.directory, 'comments.json'), JSON.stringify(makeDocument([legacy, deleted])));
+  const loaded = await app.get();
+  assert.equal(loaded.status, 200);
+  assert.deepEqual((await loaded.json()).comments, [legacy, deleted]);
+  assert.equal(feedbackChapter(legacy), 4);
+  assert.equal(feedbackChapter(comment('branch', { chapter: 5 })), 5);
+  const response = await app.post(makeDocument([comment('new-one'), comment('new-two')]));
+  assert.equal(response.status, 200);
+  const reloaded = await (await app.get()).json();
+  assert.equal(reloaded.comments.length, 4);
+  assert.deepEqual(reloaded.comments.find(c => c.id === legacy.id), legacy);
+  assert.deepEqual(reloaded.comments.find(c => c.id === deleted.id), deleted);
+});
+
+function browserStore(raw = null) {
+  let value = raw;
+  return {
+    getItem(key) { assert.equal(key, FEEDBACK_KEY); return value; },
+    setItem(key, next) { assert.equal(key, FEEDBACK_KEY); value = next; },
+  };
+}
+
+test('browser writes merge legacy and concurrent comments and survive reopening', () => {
+  const legacy = comment('legacy', { chapter: 6, chapterTitle: '使用模型' });
+  const storage = browserStore(JSON.stringify(makeDocument([legacy])));
+  saveBrowserComments(storage, [comment('new-one')]);
+  // A second tab starts from an older list; its write must retain the first note.
+  saveBrowserComments(storage, [legacy, comment('new-two')]);
+  const reopened = normalizeDocument(JSON.parse(storage.getItem(FEEDBACK_KEY)));
+  assert.equal(reopened.comments.length, 3);
+  assert.deepEqual(reopened.comments.find(c => c.id === legacy.id), legacy);
+});
+
+test('invalid browser data stays untouched; a transient read failure can recover', () => {
+  const damaged = browserStore('{broken');
+  assert.throws(() => saveBrowserComments(damaged, [comment()]));
+  assert.equal(damaged.getItem(FEEDBACK_KEY), '{broken');
+  const storage = browserStore();
+  const read = storage.getItem;
+  storage.getItem = () => { throw new Error('temporarily unavailable'); };
+  assert.throws(() => saveBrowserComments(storage, [comment()]));
+  storage.getItem = read;
+  assert.equal(saveBrowserComments(storage, [comment()]).length, 1);
+});
+
+test('save confirmation requires an acknowledged browser or project copy', async () => {
+  const fail = () => { throw new Error('unavailable'); };
+  assert.deepEqual(await saveFeedbackCopies([comment()], fail, fail), {
+    saved: false, browserSaved: false, fileSaved: false,
+  });
+  assert.equal((await saveFeedbackCopies([comment()], () => false, async () => false)).saved, false);
+  assert.deepEqual(await saveFeedbackCopies([comment()], () => true, fail), {
+    saved: true, browserSaved: true, fileSaved: false,
+  });
+  assert.deepEqual(await saveFeedbackCopies([comment()], fail, async () => true), {
+    saved: true, browserSaved: false, fileSaved: true,
+  });
+  let acknowledge;
+  let settled = false;
+  const pending = saveFeedbackCopies([comment()], () => false, () => new Promise(resolve => { acknowledge = resolve; }));
+  pending.then(() => { settled = true; });
+  await Promise.resolve();
+  assert.equal(settled, false);
+  acknowledge(true);
+  assert.equal((await pending).fileSaved, true);
 });

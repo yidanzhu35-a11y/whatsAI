@@ -12,7 +12,7 @@ export function DataPage({dedupe,setDedupe,go,model}) {
  const symbol=text[at],inputIds=contextOf(text.slice(0,at)),tokenId=inputIds.at(-1),inputSymbol=VOCAB[tokenId],vector=Array.from(model.E.slice(tokenId*EMBED,(tokenId+1)*EMBED));
  const changeLine=n=>{setLine(n);setPos(Math.min(12,rows[n].text.length-1))};
  return <><div className="split"><Intro no="02" title={<Copy id="dp-title">模型需要从具体文本中学习。</Copy>}>
-  <p><Copy id="dp-p1a">接下来亲手训练一个</Copy><strong><Copy id="dp-p1b">预测下一字的微型语言模型</Copy></strong><Copy id="dp-p1c">，从随机的初始数字开始学习。这是语言模型的一种训练任务；图片分类、语音识别等任务会使用不同的输入和目标。</Copy></p>
+  <p><Copy id="dp-p1a">接下来亲手训练一个</Copy><strong><Copy id="dp-p1b">预测下一字的微型语言模型</Copy></strong><Copy id="dp-p1c">，从随机的初始数字开始学习。（这是语言模型的一种训练任务；图片分类、语音识别等任务会使用不同的输入和目标）</Copy></p>
   <p><Copy id="dp-p2a">为此，先收集一批句子：把前文交给模型，再用原文紧接着的字检查预测。程序据此调整模型里的</Copy><Term name="参数"/><Copy id="dp-p2b">——参与预测、能通过训练修改的数字。</Copy></p>
   <p><Copy id="dp-p3a">用于调整参数的句子组成</Copy><strong><Copy id="dp-p3b">训练集</Copy></strong><Copy id="dp-p3c">。另留</Copy><strong><Copy id="dp-p3d">验证集</Copy></strong><Copy id="dp-p3e">只检查效果、不更新参数，观察模型在没有用于训练的文本上表现如何。下面选一句话，查看它怎样变成输入与目标。</Copy></p>
  </Intro><div className="interactive"><div className="workbench"><Workbar title={<Copy id="dp-workbar">数据工作区</Copy>}><Tag>训练文本</Tag></Workbar>

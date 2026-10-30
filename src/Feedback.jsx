@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { FEEDBACK_KEY, makeDocument, normalizeDocument, mergeComments, nextTimestamp, commentsMarkdown } from './feedback-store.js';
+import { FEEDBACK_KEY, makeDocument, normalizeDocument, mergeComments, nextTimestamp, commentsMarkdown, feedbackChapter, saveBrowserComments, saveFeedbackCopies } from './feedback-store.js';
 import { captureAnchor, findAnchor, pageContext } from './feedback-anchor.js';
 import './feedback.css';
 
@@ -10,8 +10,8 @@ function loadBrowser() {
   try {
     const raw = localStorage.getItem(FEEDBACK_KEY);
     return { comments: raw ? normalizeDocument(JSON.parse(raw)).comments : [], error: '' };
-  } catch {
-    return { comments: [], error: '本浏览器的批注无法读取。为避免覆盖，已停止自动保存；可导出当前列表备份。' };
+  } catch (problem) {
+    return { comments: [], error: `浏览器副本读取失败：${problem.message}。原副本未覆盖；新批注需确认项目文件保存成功，或导出备份。` };
   }
 }
 
@@ -39,10 +39,13 @@ export function Feedback({ chapter, chapters, go }) {
   const [target, setTarget] = useState(null);
   const [bounds, setBounds] = useState(null);
   const [message, setMessage] = useState('');
-  const [error, setError] = useState(initial.error);
+  const [error, setError] = useState('');
+  const [storageError, setStorageError] = useState(initial.error);
+  const [fileError, setFileError] = useState('');
+  const [savingDraft, setSavingDraft] = useState(false);
+  const draftSavePending = useRef(false);
   const [fileState, setFileState] = useState(localFile ? 'loading' : 'browser');
   const [storageOk, setStorageOk] = useState(!initial.error);
-  const storageBlocked = useRef(Boolean(initial.error));
   const textarea = useRef(null);
   const launcher = useRef(null);
   const upload = useRef(null);
@@ -54,46 +57,56 @@ export function Feedback({ chapter, chapters, go }) {
   const remember = useCallback(next => {
     commentsRef.current = next;
     setComments(next);
-    if (storageBlocked.current) return;
     try {
-      localStorage.setItem(FEEDBACK_KEY, JSON.stringify(makeDocument(next)));
+      const saved = saveBrowserComments(localStorage, next);
+      commentsRef.current = saved;
+      setComments(saved);
       setStorageOk(true);
-    } catch {
+      setStorageError('');
+      return true;
+    } catch (problem) {
       setStorageOk(false);
-      setError('浏览器存储不可用。若项目文件也未保存，请立即导出备份后再关闭页面。');
+      setStorageError(`浏览器副本未保存：${problem.message}。原副本未覆盖；请确认项目文件已保存，或导出备份。`);
+      return false;
     }
   }, []);
 
   const syncToFile = useCallback(next => {
-    if (!localFile) return;
+    if (!localFile) return Promise.resolve(false);
     const sequence = ++saveSequence.current;
     setFileState('saving');
     const task = writeQueue.current.catch(() => {}).then(async () => {
       const response = await fetch('/__feedback', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(makeDocument(next)),
+        signal: AbortSignal.timeout(8000),
       });
       const result = await response.json();
       if (!response.ok) throw new Error(result.error || '项目文件保存失败');
       const saved = normalizeDocument(result);
       remember(mergeComments(commentsRef.current, saved.comments));
-      if (sequence === saveSequence.current) setFileState('saved');
+      if (sequence === saveSequence.current) { setFileState('saved'); setFileError(''); }
+      return true;
     });
     writeQueue.current = task;
-    task.catch(() => { if (sequence === saveSequence.current) setFileState('failed'); });
+    return task.catch(problem => {
+      if (sequence === saveSequence.current) { setFileState('failed'); setFileError(problem.message); }
+      return false;
+    });
   }, [remember]);
 
   const syncFromFile = useCallback(async () => {
     if (!localFile) return;
     try {
-      const response = await fetch('/__feedback', { cache: 'no-store' });
-      if (!response.ok) throw new Error('项目文件读取失败');
-      const remote = normalizeDocument(await response.json());
+      const response = await fetch('/__feedback', { cache: 'no-store', signal: AbortSignal.timeout(8000) });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error || '项目文件读取失败');
+      const remote = normalizeDocument(result);
       const merged = mergeComments(commentsRef.current, remote.comments);
       remember(merged);
       if (JSON.stringify(merged) !== JSON.stringify(remote.comments)) syncToFile(merged);
-      else setFileState('saved');
-    } catch { setFileState('failed'); }
+      else { setFileState('saved'); setFileError(''); }
+    } catch (problem) { setFileState('failed'); setFileError(problem.message); }
   }, [remember, syncToFile]);
 
   useEffect(() => { syncFromFile(); }, [syncFromFile]);
@@ -118,14 +131,24 @@ export function Feedback({ chapter, chapters, go }) {
     return () => window.removeEventListener('storage', receive);
   }, [remember, syncToFile]);
 
-  const change = next => {
+  const change = async next => {
     try {
       normalizeDocument(makeDocument(next));
-      remember(next);
-      syncToFile(next);
-      return true;
-    } catch (problem) { setError(problem.message); return false; }
+      setMessage('');
+      const receipt = await saveFeedbackCopies(next, remember, syncToFile);
+      if (!receipt.saved) throw new Error('批注尚未保存：浏览器副本和项目文件都未写入。内容暂留在当前页面，请导出备份，不要刷新或关闭。');
+      setError('');
+      return receipt;
+    } catch (problem) { setError(problem.message); return null; }
   };
+
+  useEffect(() => {
+    const hasUnsaved = Boolean(draft?.body.trim()) || (comments.length > 0 && !storageOk && fileState !== 'saved');
+    if (!hasUnsaved) return;
+    const warn = event => { event.preventDefault(); event.returnValue = ''; };
+    window.addEventListener('beforeunload', warn);
+    return () => window.removeEventListener('beforeunload', warn);
+  }, [draft, comments.length, storageOk, fileState]);
 
   const stopPicking = useCallback(() => {
     pickingRef.current = false;
@@ -217,19 +240,27 @@ export function Feedback({ chapter, chapters, go }) {
     setDraft({ kind: 'chapter', quote: '', selector: '', context: pageContext(), chapter, chapterTitle: chapters[chapter], body: '' });
     setTarget(null); setActiveId(null);
   };
-  const saveDraft = event => {
+  const saveDraft = async event => {
     event.preventDefault();
-    if (!draft?.body.trim()) return;
+    if (!draft?.body.trim() || draftSavePending.current) return;
+    draftSavePending.current = true;
+    setSavingDraft(true);
     const previous = draft.id ? commentsRef.current.find(item => item.id === draft.id) : null;
     const now = nextTimestamp(previous?.updatedAt);
     const item = {
       ...draft, id: draft.id || crypto.randomUUID(), body: draft.body.trim(),
       createdAt: previous?.createdAt || now, updatedAt: now, status: previous?.status || 'open',
     };
-    if (change(mergeComments(commentsRef.current, [item]))) {
-      setDraft(null); setActiveId(item.id); setFilter(item.status);
-      setMessage('批注已保存。可以继续选下一处。');
-    }
+    // Keep the same identity when retrying a failed save.
+    setDraft(item);
+    try {
+      const receipt = await change(mergeComments(commentsRef.current, [item]));
+      if (receipt) {
+        setDraft(null); setActiveId(item.id); setFilter(item.status);
+        setMessage(receipt.fileSaved ? '批注已保存到项目文件。可以继续选下一处。' : localFile ? '批注已保存在本浏览器；项目文件尚未同步。可导出备份。' : '批注已保存在本浏览器。可导出备份。');
+      }
+    } catch (problem) { setError(problem.message); }
+    finally { draftSavePending.current = false; setSavingDraft(false); }
   };
   const updateComment = (item, values) => {
     const latest = commentsRef.current.find(entry => entry.id === item.id) || item;
@@ -238,7 +269,7 @@ export function Feedback({ chapter, chapters, go }) {
   const locate = item => {
     setActiveId(item.id); setTarget(null);
     if (window.innerWidth < 1100) setOpen(false);
-    go(item.chapter);
+    go(feedbackChapter(item));
     requestAnimationFrame(() => requestAnimationFrame(() => {
       const found = findAnchor(item);
       if (found) {
@@ -258,7 +289,7 @@ export function Feedback({ chapter, chapters, go }) {
     try {
       if (file.size > 2 * 1024 * 1024) throw new Error('文件超过 2 MB');
       const imported = normalizeDocument(JSON.parse(await file.text()));
-      if (change(mergeComments(commentsRef.current, imported.comments))) {
+      if (await change(mergeComments(commentsRef.current, imported.comments))) {
         setMessage('批注已合并；已有编号保留较新的修改。'); setFilter('all');
       }
     } catch (problem) { setError(problem.message || '导入失败，原批注未改动'); }
@@ -281,17 +312,18 @@ export function Feedback({ chapter, chapters, go }) {
     {open && !picking && <aside className="feedback-panel" aria-label="页面批注">
       <div className="feedback-heading"><div><span className="feedback-eyebrow">边看边改</span><h2>页面批注 <small>{active.length}</small></h2></div><button aria-label="收起批注面板" onClick={() => { setOpen(false); setTarget(null); }}>×</button></div>
       <div className="feedback-save-state" role="status"><i className={fileState === 'saved' || storageOk ? '' : 'warning'}/>{status}</div>
-      {fileState === 'failed' && <div className="feedback-warning">项目文件暂未同步。批注仍可在本浏览器保留、导出；重启预览后可重试。<button onClick={syncFromFile}>重试同步</button></div>}
+      {fileState === 'failed' && <div className="feedback-warning">项目文件暂未同步：{fileError}。{storageOk ? '批注已保留在本浏览器，可导出备份。' : '浏览器副本也未保存，请先导出备份，不要刷新。'}<button onClick={syncFromFile}>重试同步</button></div>}
+      {storageError && <div className="feedback-warning" role="alert">{storageError}</div>}
       {error && <div className="feedback-warning" role="alert">{error}<button aria-label="关闭批注提示" onClick={() => setError('')}>关闭提示</button></div>}
       <div className="feedback-scroll">
         {draft ? <form className="feedback-editor" onSubmit={saveDraft}>
           <div className="feedback-meta">{draft.chapterTitle} · {labelForKind[draft.kind]}</div>
           {draft.quote && <blockquote>{draft.quote}</blockquote>}
           <label htmlFor="feedback-body">{draft.id ? '编辑批注' : '你的意见'}</label>
-          <textarea ref={textarea} id="feedback-body" value={draft.body} maxLength={10000} placeholder="例如：这一句我没看懂，请补充它和前一步的关系。" onChange={event => setDraft({ ...draft, body: event.target.value })} onKeyDown={event => {
+          <textarea ref={textarea} id="feedback-body" disabled={savingDraft} value={draft.body} maxLength={10000} placeholder="例如：这一句我没看懂，请补充它和前一步的关系。" onChange={event => setDraft({ ...draft, body: event.target.value })} onKeyDown={event => {
             if ((event.ctrlKey || event.metaKey) && event.key === 'Enter') { event.preventDefault(); saveDraft(event); }
           }}/>
-          <div className="feedback-editor-actions"><button type="button" onClick={() => { setDraft(null); setTarget(null); }}>取消</button><button className="feedback-primary" type="submit" disabled={!draft.body.trim()}>保存批注</button></div>
+          <div className="feedback-editor-actions"><button type="button" disabled={savingDraft} onClick={() => { setDraft(null); setTarget(null); }}>取消</button><button className="feedback-primary" type="submit" disabled={!draft.body.trim() || savingDraft}>{savingDraft ? '正在保存…' : '保存批注'}</button></div>
           <small>Ctrl / ⌘ + Enter 保存</small>
         </form> : <div className="feedback-new"><p>不必截图。选择文字、按钮或图表，再写下意见。</p><button className="feedback-primary" onClick={startPicking}>＋ 选择页面位置</button><button className="feedback-chapter-button" onClick={startChapter}>给「{chapters[chapter]}」整章留意见</button></div>}
         {message && <p className="feedback-message" role="status">{message}{undo.current && <button onClick={() => {

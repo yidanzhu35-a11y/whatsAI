@@ -23,6 +23,6 @@ export function Concept({go}) {
         {type==='具身智能模型'&&<><p className="route-context"><Copy id="cd-emb-1">具身智能强调感知环境并采取行动，常同时处理图像、语言和设备状态，因此也可能采用多模态模型。</Copy>{route==='监督学习'?<Copy id="cd-emb-sl">这里通过示范动作进行监督训练；在已有策略上适应新任务，就是任务微调。</Copy>:route==='偏好优化'?<><Copy id="cd-emb-pref-1">这里以人类对动作的比较训练奖励模型，再进行强化学习，是 </Copy><Term name="RLHF"/><Copy id="cd-emb-pref-2"> 的一种应用。</Copy></>:route==='强化学习'?<><Copy id="cd-emb-rl-1">这里用程序计算的任务得分作为</Copy><Term name="奖励"/><Copy id="cd-emb-rl-2">。</Copy></>:''}</p><a className="source-link" href="https://huggingface.co/docs/lerobot/index" target="_blank" rel="noreferrer"><Copy id="cd-emb-source">延伸阅读：LeRobot 的机器人数据与训练</Copy></a></>}
       </article>
     </section>
-    <div className="actions"><button className="primary" onClick={()=>go(1)}><Copy id="cd-action">从一份数据开始</Copy></button></div>
+    <div className="actions"><button className="primary" onClick={()=>go(1)}><Copy id="cd-action">从准备训练数据开始</Copy></button></div>
   </>;
 }
