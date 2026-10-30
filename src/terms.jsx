@@ -1,4 +1,5 @@
 import React, {useId, useState} from 'react';
+import {Copy} from './copy.jsx';
 
 export const definitions = {
   '学习信号': '训练程序需要一个依据，才能判断模型的结果该怎样改进。这个依据叫学习信号：可以是原文中实际出现的下一个字、人工提供的正确类别，也可以是回答比较或测试分数。程序将它转成可优化的训练目标。',
@@ -48,7 +49,7 @@ export const definitions = {
 export function Term({name, children}) {
   const [open,setOpen]=useState(false);
   const id=useId();
-  return <span className="inline-term"><button type="button" className="term-button" aria-expanded={open} aria-controls={id} onClick={()=>setOpen(v=>!v)}>{children||name}</button>{open&&<span className="term-definition" id={id} role="note"><strong>{name}：</strong>{definitions[name]}</span>}</span>;
+  return <span className="inline-term"><button type="button" className="term-button" aria-expanded={open} aria-controls={id} onClick={()=>setOpen(v=>!v)}>{children||name}</button>{open&&<span className="term-definition" id={id} role="note"><strong>{name}：</strong><Copy id={'term:'+name} value={definitions[name]}></Copy></span>}</span>;
 }
 
 // Use only for plain scenario copy; nested term buttons are never created.
@@ -63,6 +64,6 @@ export function ChoiceHelp({name,selected,onChoose}) {
   const show=e=>{const rect=e.currentTarget.getBoundingClientRect(),width=Math.min(320,window.innerWidth-32);setLeft(Math.min(0,window.innerWidth-16-rect.left-width));setOpen(true)};
   return <span className="choice-help" onPointerEnter={show} onPointerLeave={()=>setOpen(false)} onFocus={show} onBlur={e=>{if(!e.currentTarget.contains(e.relatedTarget))setOpen(false)}} onKeyDown={e=>{if(e.key==='Escape'){setOpen(false);e.stopPropagation()}}}>
     <button aria-pressed={selected} aria-describedby={open?id:undefined} className={selected?'selected':''} onClick={()=>{onChoose();setOpen(true)}}>{name}</button>
-    {open&&<span id={id} role="tooltip" className="choice-tooltip" style={{left}}>{definitions[name]}</span>}
+    {open&&<span id={id} role="tooltip" className="choice-tooltip" style={{left}}><Copy id={'term:'+name} value={definitions[name]}></Copy></span>}
   </span>;
 }
